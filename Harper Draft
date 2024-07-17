@@ -1,0 +1,16 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import pandas as pds
+
+
+class Encoder(nn.Module):
+     def __init__(input_dim, latent_dim):
+          a
+
+
+class Decoder(nn.Module):
+     def __init__(input_dim, latent_dim):
+          a
+
+
