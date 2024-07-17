@@ -1,0 +1,87 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import pandas as pd
+
+class Encoder(nn.Module):
+    def __init__(self, input_dim, latent_dim):
+        super(Encoder, self).__init__()
+        self.conv1 = nn.Conv2d(input_dim, 128, kernel_size=1, stride=1, padding=0)
+        self.conv2 = nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0)
+        self.conv3 = nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0)
+        self.conv4 = nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
+        self.fc_mu = nn.Linear(1024, latent_dim)
+        self.fc_logvar = nn.Linear(1024, latent_dim)
+
+    def forward(self, x):
+        x = x.permute(0, 3, 1, 2)  # Assuming input shape is (batch_size, seq_length, channels)
+        x = F.leaky_relu(self.conv1(x))
+        x = F.leaky_relu(self.conv2(x))
+        x = F.leaky_relu(self.conv3(x))
+        x = F.leaky_relu(self.conv4(x))
+        x = x.view(x.size(0), -1)  # Flatten before fully connected layers
+        mu = self.fc_mu(x)
+        logvar = self.fc_logvar(x)
+        return mu, logvar
+
+class Decoder(nn.Module):
+    def __init__(self, latent_dim, output_dim):
+        super(Decoder, self).__init__()
+        self.fc = nn.Linear(latent_dim, 1024)
+        self.deconv1 = nn.ConvTranspose2d(1024, 512, kernel_size=1, stride=1, padding=0)
+        self.deconv2 = nn.ConvTranspose2d(512, 256, kernel_size=1, stride=1, padding=0)
+        self.deconv3 = nn.ConvTranspose2d(256, 128, kernel_size=1, stride=1, padding=0)
+        self.deconv4 = nn.ConvTranspose2d(128, output_dim, kernel_size=1, stride=1, padding=0)
+
+    def forward(self, z):
+        z = F.leaky_relu(self.fc(z))
+        z = z.view(z.size(0), 1024, 1, 1)  # Reshape to (batch_size, 1024, 1, 1)
+        z = F.leaky_relu(self.deconv1(z))
+        z = F.leaky_relu(self.deconv2(z))
+        z = F.leaky_relu(self.deconv3(z))
+        recon = torch.sigmoid(self.deconv4(z))  # Assuming output should be in [0, 1] range
+        return recon
+
+class VAE(nn.Module):
+    def __init__(self, input_dim, latent_dim):
+        super(VAE, self).__init__()
+        self.encoder = Encoder(input_dim, latent_dim)
+        self.decoder = Decoder(latent_dim, input_dim)
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x):
+        mu, logvar = self.encoder(x)
+        z = self.reparameterize(mu, logvar)
+        recon = self.decoder(z)
+        return recon, mu, logvar
+
+if __name__ == '__main__':
+    # Example usage:
+    input_dim = 263  # Adjust based on your input data dimension
+    latent_dim = 128  # Adjust based on desired latent dimensionality
+
+    # Initialize VAE model
+    vae = VAE(input_dim, latent_dim)
+
+    # Example of passing data through the VAE
+    batch_size = 32
+    seq_length = 60
+    input_data = torch.randn(batch_size, seq_length, input_dim)  # Example input data
+    recon, mu, logvar = vae(input_data)
+
+    # Example of post-processing reconstructed motion data (smoothing)
+    def smooth_motion(recon):
+        recon_np = recon.detach().cpu().numpy()
+        for idx in range(recon_np.shape[1]):
+            recon_np[:, idx] = pd.Series(recon_np[:, idx]).rolling(window=5).mean().bfill().ffill()
+        return torch.from_numpy(recon_np)
+
+    smoothed_recon = smooth_motion(recon)
+
+    print(f"Input data shape: {input_data.shape}")
+    print(f"Reconstructed data shape: {recon.shape}")
+    print(f"Smoothed reconstructed data shape: {smoothed_recon.shape}")
