@@ -48,9 +48,6 @@ class VAE(nn.Module):
         recon = self.decoder(z, x.size(1))  # x.size(1) is the sequence length
         return recon, mu, logvar
 
-# Example usage:
-# Assuming you have a DataLoader set up for your motion capture dataset
-# Define your training loop
 def train_vae(vae, train_loader, num_epochs=10, learning_rate=1e-3):
     optimizer = torch.optim.Adam(vae.parameters(), lr=learning_rate)
 
@@ -64,31 +61,27 @@ def train_vae(vae, train_loader, num_epochs=10, learning_rate=1e-3):
     vae.train()
     for epoch in range(num_epochs):
         total_loss = 0
-        for batch_idx, data in enumerate(train_loader):
+        for batch_idx, (data,) in enumerate(train_loader):
             optimizer.zero_grad()
             recon_batch, mu, logvar = vae(data)
             loss = loss_function(recon_batch, data, mu, logvar)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-        print(f'Epoch {epoch+1}, Loss: {total_loss/len(train_loader):.4f}')
+        print(f'Epoch {epoch+1}, Loss: {total_loss/len(train_loader.dataset):.4f}')
 
-# Example usage:
-# Assuming train_loader is your DataLoader for motion capture data (amc files)
-# and your_input_dim and your_latent_dim are appropriately defined
-
-path = 'tensor.pt'
-
+# Load the tensor
 tensor = torch.load('tensor.pt', map_location=torch.device('cpu'))
 
-mocap_data = torch.tensor(tensor, dtype=torch.float32)
+print(tensor.shape)
+print(tensor.dtype)
 
 # Create a TensorDataset and DataLoader
-dataset = TensorDataset(mocap_data)
+dataset = TensorDataset(tensor)
 train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 # Define input and latent dimensions
-input_dim = 62  # Number of features per time step
+input_dim = tensor.size(-1)  # Number of features per time step, assuming the last dimension is the feature dimension
 latent_dim = 16  # Chosen latent dimension
 
 # Initialize and train the VAE
