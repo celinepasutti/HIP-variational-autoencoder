@@ -48,7 +48,7 @@ class VAE(nn.Module):
         recon = self.decoder(z, x.size(1))  # x.size(1) is the sequence length
         return recon, mu, logvar
 
-def train_vae(vae, train_loader, num_epochs=10, learning_rate=1e-3):
+def train_vae(vae, train_loader, num_epochs=1000, learning_rate=1e-4):
     optimizer = torch.optim.Adam(vae.parameters(), lr=learning_rate)
 
     def loss_function(recon_x, x, mu, logvar):
@@ -56,7 +56,7 @@ def train_vae(vae, train_loader, num_epochs=10, learning_rate=1e-3):
         MSE = F.mse_loss(recon_x, x, reduction='sum')
         # KL divergence
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        return MSE + KLD
+        return MSE + 0 * KLD
 
     vae.train()
     for epoch in range(num_epochs):
@@ -73,7 +73,7 @@ def train_vae(vae, train_loader, num_epochs=10, learning_rate=1e-3):
 # Load the tensor
 tensor = torch.load('tensor.pt', map_location=torch.device('cpu'))
 
-print(tensor.shape)
+print(tensor.shape, 'SAVED')
 print(tensor.dtype)
 
 # Create a TensorDataset and DataLoader
@@ -82,7 +82,7 @@ train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 # Define input and latent dimensions
 input_dim = tensor.size(-1)  # Number of features per time step, assuming the last dimension is the feature dimension
-latent_dim = 16  # Chosen latent dimension
+latent_dim = 32  # Chosen latent dimension
 
 # Initialize and train the VAE
 vae = VAE(input_dim=input_dim, latent_dim=latent_dim)
