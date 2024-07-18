@@ -48,12 +48,13 @@ class VAE(nn.Module):
         recon = self.decoder(z, x.size(1))  # x.size(1) is the sequence length
         return recon, mu, logvar
 
-def train_vae(vae, train_loader, num_epochs=1000, learning_rate=1e-4):
-    optimizer = torch.optim.Adam(vae.parameters(), lr=learning_rate)
+def train_vae(vae, train_loader, device, num_epochs=1000, learning_rate=1e-4):
+    weight_decay = 1e-2
+    optimizer = torch.optim.AdamW(vae.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     def loss_function(recon_x, x, mu, logvar):
         # Reconstruction loss (mean squared error)
-        MSE = F.mse_loss(recon_x, x, reduction='sum')
+        MSE = F.mse_loss(recon_x, x)
         # KL divergence
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return MSE + 0 * KLD
@@ -62,6 +63,7 @@ def train_vae(vae, train_loader, num_epochs=1000, learning_rate=1e-4):
     for epoch in range(num_epochs):
         total_loss = 0
         for batch_idx, (data,) in enumerate(train_loader):
+            data = data.to(device)  # Move data to the appropriate device
             optimizer.zero_grad()
             recon_batch, mu, logvar = vae(data)
             loss = loss_function(recon_batch, data, mu, logvar)
@@ -70,10 +72,12 @@ def train_vae(vae, train_loader, num_epochs=1000, learning_rate=1e-4):
             total_loss += loss.item()
         print(f'Epoch {epoch+1}, Loss: {total_loss/len(train_loader.dataset):.4f}')
 
-# Load the tensor
-tensor = torch.load('tensor.pt', map_location=torch.device('cpu'))
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-print(tensor.shape, 'SAVED')
+# Load the tensor
+tensor = torch.load('tensor.pt', map_location=torch.device(device))
+
+print(tensor.shape)
 print(tensor.dtype)
 
 # Create a TensorDataset and DataLoader
@@ -84,6 +88,8 @@ train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 input_dim = tensor.size(-1)  # Number of features per time step, assuming the last dimension is the feature dimension
 latent_dim = 32  # Chosen latent dimension
 
-# Initialize and train the VAE
-vae = VAE(input_dim=input_dim, latent_dim=latent_dim)
-train_vae(vae, train_loader)
+# Initialize the VAE and move it to the appropriate device
+vae = VAE(input_dim=input_dim, latent_dim=latent_dim).to(device)
+
+# Train the VAE
+train_vae(vae, train_loader, device)
